@@ -656,7 +656,15 @@ export async function softDeleteComponent(id: string): Promise<SoftDeleteResult>
           content_hash: contentHash,
           updated_at: new Date().toISOString(),
         })
-        .eq('id', entity.id);
+        .eq('id', entity.id)
+        // CRITICAL: page_layers has composite PK (id, is_published). Without
+        // this filter, the UPDATE writes the new layers + draft content_hash
+        // onto the published row too. Two failure modes:
+        //   1. Published row carries new layers but stale generated_css —
+        //      site renders broken classes for the deleted component.
+        //   2. batchPublishPageLayers compares hashes, sees draft == published
+        //      (we just wrote it!), and skips the page on publish.
+        .eq('is_published', false);
 
       if (updateError) {
         console.error(`Failed to update page_layers ${entity.id}:`, updateError);
